@@ -204,7 +204,10 @@ docker compose logs --tail 100 bot
 curl --fail http://127.0.0.1:3000/health
 ```
 
-`.release.env` is written only after a healthy deployment. If the first deployment fails, set
+`.release.env` records `ASTRA_IMAGE` and `PREVIOUS_ASTRA_IMAGE` only after a healthy deployment.
+The previous image is the last different successfully deployed release; redeploying the same SHA
+does not replace it. Existing state files containing only `ASTRA_IMAGE` are supported.
+If the first deployment fails, set
 `export ASTRA_IMAGE=ghcr.io/YOUR_OWNER/YOUR_REPO:FULL_COMMIT_SHA` from the failed Actions run before
 using Compose. To retry a release, run `bash deploy.sh "$ASTRA_IMAGE"`.
 An older application image can be redeployed only if it is compatible with the current schema.
@@ -228,9 +231,20 @@ rsync -av -e 'ssh -i ~/.ssh/astra-deploy' deploy@YOUR_VPS_IP:/opt/astra-bot/back
 ```
 
 Treat dumps as private chat data. Test restoration into a separate database with `pg_restore` before
-relying on them. Container logs are rotated. Monitor `df -h` and `docker system df`; after a successful
-deployment, `docker image prune -a --filter 'until=168h'` can remove unused older images, including
-local rollback images. It does not remove volumes. GHCR image retention must also be managed separately.
+relying on them. Container logs are rotated. Monitor `df -h` and `docker system df`.
+
+After each successful deployment, the deploy script retains the current and previous distinct
+successful releases, including both `-migrate` images. It removes other full-SHA release tags only
+from the deployed Astra image repository. Images referenced by running or stopped containers are
+also retained. On the first-ever deployment, only the current release is known and retained.
+Cleanup runs under the deployment lock after the health check and atomic release-state update;
+failed deployments do not trigger it. Cleanup errors produce a warning without failing a healthy
+deployment and are retried on the next successful deploy.
+
+This cleanup does not remove database volumes, backups, build cache, other repositories, or GHCR
+images. Keep enough disk space to download a new release before cleanup; if the disk is already
+full, remove selected obsolete images manually while preserving the current release and its migration
+image. Keeping an older image does not guarantee its compatibility with the current database schema.
 
 ## Conversation memory
 
