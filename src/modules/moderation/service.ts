@@ -9,6 +9,7 @@ import type {
 
 export type Eligibility = "allowed" | "protected" | "denied";
 
+
 export interface ModerationActions {
   eligibility(item: ReviewCase): Promise<Eligibility>;
   notify(item: ReviewCase): Promise<number | undefined>;
